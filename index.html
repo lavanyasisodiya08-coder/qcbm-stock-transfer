@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QCBM Cross-Transfer — Does a quantum circuit help predict a stock with too little history?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0F1A;
+    --panel:#111827;
+    --panel-alt:#0D1420;
+    --line: rgba(148,163,184,0.14);
+    --line-strong: rgba(148,163,184,0.28);
+    --text:#E7ECF5;
+    --muted:#8B96AC;
+    --faint:#5C687F;
+    --teal:#5EEAD4;
+    --teal-dim: rgba(94,234,212,0.14);
+    --up:#34D399;
+    --down:#FB7185;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sans: 'Space Grotesk', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--teal-dim); color:var(--teal); }
+
+  a{ color:var(--teal); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 28px; }
+
+  header.top{
+    padding:22px 0;
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:rgba(10,15,26,0.86);
+    backdrop-filter:blur(10px);
+    z-index:20;
+  }
+  .top-inner{ display:flex; align-items:center; justify-content:space-between; }
+  .brand{ font-family:var(--mono); font-size:14px; color:var(--text); display:flex; align-items:center; gap:10px; }
+  .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px var(--teal); }
+  nav.top-nav{ display:flex; gap:26px; font-family:var(--mono); font-size:13px; color:var(--muted); }
+  nav.top-nav a{ color:var(--muted); }
+  nav.top-nav a:hover{ color:var(--teal); text-decoration:none; }
+
+  /* ---------- HERO ---------- */
+  .hero{ padding:76px 0 60px; border-bottom:1px solid var(--line); }
+  .hero-grid{ display:grid; grid-template-columns:1.15fr 1fr; gap:56px; align-items:center; }
+  .kicker{ font-family:var(--mono); font-size:13px; color:var(--faint); margin:0 0 18px; }
+  h1{
+    font-size:44px; line-height:1.12; margin:0 0 20px; font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .hero p.lede{ color:var(--muted); font-size:17px; max-width:52ch; margin:0 0 28px; }
+  .hero-stats{ display:flex; gap:32px; margin-top:8px; }
+  .hstat b{ display:block; font-family:var(--mono); font-size:22px; color:var(--text); }
+  .hstat span{ font-size:12.5px; color:var(--faint); }
+  .hero-svg{ width:100%; height:auto; }
+
+  /* ---------- SECTION SHELL ---------- */
+  section{ padding:64px 0; border-bottom:1px solid var(--line); }
+  section:last-of-type{ border-bottom:none; }
+  h2{ font-size:26px; margin:0 0 14px; font-weight:600; letter-spacing:-0.01em; }
+  .section-lede{ color:var(--muted); max-width:64ch; margin:0 0 34px; font-size:15.5px; }
+
+  /* ---------- METHOD ---------- */
+  .method-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); }
+  .method-card{ background:var(--panel-alt); padding:22px 20px 24px; }
+  .method-card .m-label{ font-family:var(--mono); font-size:12px; color:var(--teal); margin-bottom:10px; }
+  .method-card h3{ font-size:16px; margin:0 0 8px; font-weight:600; }
+  .method-card p{ font-size:13.5px; color:var(--muted); margin:0; }
+
+  /* ---------- RESULTS ---------- */
+  .chart-panel{
+    background:var(--panel-alt); border:1px solid var(--line); padding:26px 26px 12px;
+    margin-bottom:28px;
+  }
+  .chart-panel .chart-title{ font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-bottom:18px; }
+  canvas{ max-height:320px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  thead th{
+    text-align:left; font-family:var(--mono); font-weight:500; font-size:12px;
+    color:var(--faint); padding:10px 14px; border-bottom:1px solid var(--line-strong);
+  }
+  tbody td{ padding:11px 14px; border-bottom:1px solid var(--line); font-family:var(--mono); color:var(--text); }
+  tbody td:first-child, thead th:first-child{ font-family:var(--sans); color:var(--muted); }
+  tbody tr:hover{ background:rgba(148,163,184,0.04); }
+  .best{ color:var(--up); }
+  .table-wrap{ background:var(--panel-alt); border:1px solid var(--line); padding:6px 0 4px; }
+
+  /* ---------- FINDING BANNER ---------- */
+  .finding{
+    display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:start;
+    background:var(--panel-alt); border:1px solid var(--line); border-left:2px solid var(--teal);
+    padding:22px 26px; margin-top:28px;
+  }
+  .finding .f-mark{ font-family:var(--mono); font-size:12px; color:var(--teal); white-space:nowrap; padding-top:3px; }
+  .finding p{ margin:0; color:var(--text); font-size:14.5px; }
+  .finding p + p{ margin-top:10px; color:var(--muted); }
+
+  /* ---------- PIPELINE ---------- */
+  .pipeline{ display:flex; align-items:stretch; gap:0; overflow-x:auto; }
+  .pstep{ flex:1; min-width:150px; padding:18px 18px 20px; border-top:1px solid var(--line-strong); position:relative; }
+  .pstep + .pstep{ border-left:1px solid var(--line); }
+  .pstep .p-idx{ font-family:var(--mono); font-size:11px; color:var(--faint); }
+  .pstep h4{ font-size:14px; margin:8px 0 6px; font-weight:600; }
+  .pstep p{ font-size:12.5px; color:var(--muted); margin:0; }
+
+  /* ---------- STACK ---------- */
+  .stack-list{ display:flex; flex-wrap:wrap; gap:10px; }
+  .chip{
+    font-family:var(--mono); font-size:12.5px; color:var(--muted);
+    border:1px solid var(--line-strong); padding:7px 12px;
+  }
+
+  footer{ padding:40px 0 60px; }
+  footer p{ color:var(--faint); font-size:12.5px; font-family:var(--mono); }
+
+  @media (max-width: 860px){
+    .hero-grid{ grid-template-columns:1fr; }
+    .method-grid{ grid-template-columns:1fr 1fr; }
+    h1{ font-size:32px; }
+  }
+  @media (max-width: 560px){
+    .method-grid{ grid-template-columns:1fr; }
+    .hero-stats{ flex-wrap:wrap; row-gap:16px; }
+    nav.top-nav{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand"><span class="dot"></span>qcbm-stock-transfer</div>
+    <nav class="top-nav">
+      <a href="#question">The question</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#reading">What this shows</a>
+      <a href="#stack">Stack</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="kicker">Small-sample research project — NSE small-cap equities</p>
+      <h1>Can a quantum circuit lend a data-poor stock some of a data-rich stock's structure?</h1>
+      <p class="lede">A small-cap stock might have a few hundred trading days of usable history — not enough to fit a reliable next-day predictor. This project tests whether generating synthetic training days with a quantum circuit trained on large-cap data helps, compared against bootstrap resampling and a classical Markov chain doing the same job.</p>
+      <div class="hero-stats">
+        <div class="hstat"><b>4</b><span>augmentation methods</span></div>
+        <div class="hstat"><b>5</b><span>qubits in the QCBM</span></div>
+        <div class="hstat"><b>63</b><span>held-out test days / stock</span></div>
+      </div>
+    </div>
+    <svg class="hero-svg" viewBox="0 0 460 340" xmlns="http://www.w3.org/2000/svg">
+      <!-- panel -->
+      <rect x="0" y="0" width="460" height="340" fill="#0D1420" stroke="#1c2536" stroke-width="1"/>
+      <!-- 5 qubit wires -->
+      <g stroke="#2a3550" stroke-width="1.5">
+        <line x1="30" y1="40" x2="430" y2="40"/>
+        <line x1="30" y1="76" x2="430" y2="76"/>
+        <line x1="30" y1="112" x2="430" y2="112"/>
+        <line x1="30" y1="148" x2="430" y2="148"/>
+        <line x1="30" y1="184" x2="430" y2="184"/>
+      </g>
+      <g font-family="IBM Plex Mono" font-size="10" fill="#5C687F">
+        <text x="6" y="44">q0</text><text x="6" y="80">q1</text><text x="6" y="116">q2</text>
+        <text x="6" y="152">q3</text><text x="6" y="188">q4</text>
+      </g>
+      <!-- RY gate layer 1 -->
+      <g>
+        <rect x="70" y="30" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="70" y="66" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="70" y="102" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="70" y="138" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="70" y="174" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+      </g>
+      <g font-family="IBM Plex Mono" font-size="9.5" fill="#5EEAD4" text-anchor="middle">
+        <text x="83" y="44">Ry</text><text x="83" y="80">Ry</text><text x="83" y="116">Ry</text>
+        <text x="83" y="152">Ry</text><text x="83" y="188">Ry</text>
+      </g>
+      <!-- CNOT ladder -->
+      <g stroke="#3a4666" stroke-width="1.5">
+        <line x1="150" y1="40" x2="150" y2="76"/>
+        <line x1="190" y1="76" x2="190" y2="112"/>
+        <line x1="230" y1="112" x2="230" y2="148"/>
+        <line x1="270" y1="148" x2="270" y2="184"/>
+      </g>
+      <g fill="#8B96AC">
+        <circle cx="150" cy="40" r="3.5"/><circle cx="150" cy="76" r="7" fill="none" stroke="#8B96AC" stroke-width="1.5"/>
+        <circle cx="190" cy="76" r="3.5"/><circle cx="190" cy="112" r="7" fill="none" stroke="#8B96AC" stroke-width="1.5"/>
+        <circle cx="230" cy="112" r="3.5"/><circle cx="230" cy="148" r="7" fill="none" stroke="#8B96AC" stroke-width="1.5"/>
+        <circle cx="270" cy="148" r="3.5"/><circle cx="270" cy="184" r="7" fill="none" stroke="#8B96AC" stroke-width="1.5"/>
+      </g>
+      <!-- RY gate layer 2 -->
+      <g>
+        <rect x="320" y="30" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="320" y="66" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="320" y="102" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="320" y="138" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+        <rect x="320" y="174" width="26" height="20" fill="#121A2B" stroke="#5EEAD4" stroke-width="1"/>
+      </g>
+      <g font-family="IBM Plex Mono" font-size="9.5" fill="#5EEAD4" text-anchor="middle">
+        <text x="333" y="44">Ry</text><text x="333" y="80">Ry</text><text x="333" y="116">Ry</text>
+        <text x="333" y="152">Ry</text><text x="333" y="188">Ry</text>
+      </g>
+      <!-- measurement -->
+      <g stroke="#5C687F" stroke-width="1" fill="none">
+        <path d="M395 34 h20 v18 h-20 z"/>
+        <path d="M400 48 a5 5 0 0 1 10 0" />
+        <line x1="405" y1="48" x2="411" y2="38"/>
+      </g>
+      <!-- arrow down to sparkline -->
+      <line x1="230" y1="205" x2="230" y2="235" stroke="#3a4666" stroke-width="1.5"/>
+      <polygon points="230,240 225,231 235,231" fill="#3a4666"/>
+      <!-- candlestick sparkline output -->
+      <g transform="translate(60,250)">
+        <line x1="0" y1="0" x2="340" y2="0" stroke="#1c2536"/>
+        <g font-family="IBM Plex Mono" font-size="9" fill="#5C687F">
+          <text x="0" y="70">synthetic bucket sequence →</text>
+        </g>
+        <g stroke-width="1.4">
+          <line x1="30" y1="18" x2="30" y2="42" stroke="#34D399"/><rect x="26" y="22" width="8" height="14" fill="#34D399"/>
+          <line x1="55" y1="10" x2="55" y2="34" stroke="#FB7185"/><rect x="51" y="14" width="8" height="14" fill="#FB7185"/>
+          <line x1="80" y1="22" x2="80" y2="46" stroke="#34D399"/><rect x="76" y="26" width="8" height="14" fill="#34D399"/>
+          <line x1="105" y1="8" x2="105" y2="30" stroke="#34D399"/><rect x="101" y="12" width="8" height="12" fill="#34D399"/>
+          <line x1="130" y1="20" x2="130" y2="48" stroke="#FB7185"/><rect x="126" y="26" width="8" height="16" fill="#FB7185"/>
+          <line x1="155" y1="16" x2="155" y2="38" stroke="#FB7185"/><rect x="151" y="20" width="8" height="12" fill="#FB7185"/>
+          <line x1="180" y1="6" x2="180" y2="26" stroke="#34D399"/><rect x="176" y="9" width="8" height="12" fill="#34D399"/>
+          <line x1="205" y1="18" x2="205" y2="44" stroke="#34D399"/><rect x="201" y="22" width="8" height="16" fill="#34D399"/>
+          <line x1="230" y1="24" x2="230" y2="46" stroke="#FB7185"/><rect x="226" y="28" width="8" height="12" fill="#FB7185"/>
+          <line x1="255" y1="12" x2="255" y2="32" stroke="#34D399"/><rect x="251" y="15" width="8" height="12" fill="#34D399"/>
+          <line x1="280" y1="20" x2="280" y2="40" stroke="#FB7185"/><rect x="276" y="24" width="8" height="12" fill="#FB7185"/>
+          <line x1="305" y1="8" x2="305" y2="28" stroke="#34D399"/><rect x="301" y="11" width="8" height="12" fill="#34D399"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section id="question">
+  <div class="wrap">
+    <h2>The question</h2>
+    <p class="section-lede">Predictors need history to learn from. Large-cap NSE stocks have years of dense trading data; small-caps like <strong>LEELAHOTELS</strong> or <strong>AEGISVOPAK</strong> often don't — the sequence is short and thin, and a model trained only on it tends to overfit noise. Four possible fixes to that shortage are compared here, head to head, on the same downstream task: predicting tomorrow's return bucket from a short lookback window.</p>
+    <div class="method-grid">
+      <div class="method-card">
+        <div class="m-label">baseline</div>
+        <h3>No augmentation</h3>
+        <p>Train the predictor on the small-cap's own short history, untouched. The control condition every other method has to beat.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">classical</div>
+        <h3>Bootstrap</h3>
+        <p>Resample days from the stock's own history with replacement to pad the training set. Adds volume, no new structure.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">classical</div>
+        <h3>Markov cross-transfer</h3>
+        <p>Fit a Markov transition table on pooled large-cap sequences, then generate synthetic days from it to extend the small-cap's training set.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">quantum</div>
+        <h3>QCBM cross-transfer</h3>
+        <p>Train a 5-qubit Born-machine circuit on the same pooled large-cap sequences and sample synthetic days from its learned distribution.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <h2>How each run works</h2>
+    <p class="section-lede">Every small-cap stock goes through the same pipeline, once per method, so the only thing that changes between rows in the results table is where the extra training days came from.</p>
+    <div class="pipeline">
+      <div class="pstep"><div class="p-idx">01</div><h4>Bucket the history</h4><p>Daily returns are discretized into labeled buckets, turning price history into a symbol sequence.</p></div>
+      <div class="pstep"><div class="p-idx">02</div><h4>Time-ordered split</h4><p>Train / test is split by date, never shuffled — the test window always comes after the training window.</p></div>
+      <div class="pstep"><div class="p-idx">03</div><h4>Augment the train side only</h4><p>Synthetic days are appended to the training sequence. Test days are always real, untouched data.</p></div>
+      <div class="pstep"><div class="p-idx">04</div><h4>Fit the same predictor</h4><p>A logistic model with a 3-day lookback is fit fresh on each augmented training set — architecture never changes.</p></div>
+      <div class="pstep"><div class="p-idx">05</div><h4>Score on held-out days</h4><p>Accuracy and macro-F1 are measured on the same 63 real test days, for every method, on every stock.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>Results</h2>
+    <p class="section-lede">Two small-cap stocks had enough history to run the full comparison. Below: mean performance by method across both, then the per-stock, per-method breakdown behind that average.</p>
+
+    <div class="chart-panel">
+      <div class="chart-title">mean accuracy &amp; macro-F1 by method — across LEELAHOTELS, AEGISVOPAK</div>
+      <canvas id="summaryChart"></canvas>
+    </div>
+
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr><th>Ticker</th><th>Method</th><th>Accuracy</th><th>Macro F1</th><th>Test days</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="finding">
+      <div class="f-mark">reading</div>
+      <div>
+        <p>On mean accuracy, plain <strong>no-augmentation</strong> (0.262) edged out every augmentation method, including QCBM cross-transfer (0.238) and bootstrap (0.238) — with classical Markov cross-transfer lowest (0.206). On macro-F1, no-augmentation and bootstrap were close to tied at the top; QCBM and Markov both trailed.</p>
+        <p>The one place QCBM stood out was consistency: its accuracy std across the two stocks (0.022) was far tighter than bootstrap's (0.067) or no-augmentation's (0.079) — it moved less between the two very different tickers. With n=2 stocks, that's a pattern worth testing further, not a claim.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="reading">
+  <div class="wrap">
+    <h2>What this actually shows</h2>
+    <p class="section-lede">This is an honest small-sample result, not a headline. It's worth saying plainly what it does and doesn't support.</p>
+    <div class="method-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="method-card">
+        <div class="m-label">holds up</div>
+        <h3>The pipeline runs end to end</h3>
+        <p>Encoding, time-ordered splitting, three augmentation strategies, and a QCBM that actually trains and samples — all verified against real held-out test data, not synthetic placeholders.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">holds up</div>
+        <h3>No inflated quantum advantage</h3>
+        <p>On this run, the QCBM did not beat the no-augmentation baseline on accuracy or macro-F1. That's reported as-is rather than reframed as a win.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">limit</div>
+        <h3>Two stocks is not a sample</h3>
+        <p>LEELAHOTELS and AEGISVOPAK are one pair. Nothing here generalizes to small-caps broadly until this runs across many more tickers and sectors.</p>
+      </div>
+      <div class="method-card">
+        <div class="m-label">limit</div>
+        <h3>The interesting thread is stability, not accuracy</h3>
+        <p>QCBM's lower variance across two very different stocks is the one signal worth chasing — with a real experiment, not two data points.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <h2>Built with</h2>
+    <div class="stack-list">
+      <span class="chip">Python</span>
+      <span class="chip">pandas</span>
+      <span class="chip">scikit-learn (logistic baseline)</span>
+      <span class="chip">Parameterized quantum circuit (5-qubit QCBM, Ry + CNOT ladder)</span>
+      <span class="chip">Classical Markov chain</span>
+      <span class="chip">NSE daily OHLC data</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>qcbm-stock-transfer — small-cap next-bucket prediction, cross-transfer augmentation study. Results shown are from the project's own augmentation_results.csv / augmentation_summary.csv.</p>
+  </div>
+</footer>
+
+<script>
+  const resultsData = [
+    {ticker:"LEELAHOTELS", method:"no_augmentation", accuracy:0.31746031746031744, macro_f1:0.20771241830065362, n_test:63},
+    {ticker:"LEELAHOTELS", method:"bootstrap", accuracy:0.2857142857142857, macro_f1:0.21509803921568627, n_test:63},
+    {ticker:"LEELAHOTELS", method:"markov_cross_transfer", accuracy:0.20634920634920634, macro_f1:0.11373737373737373, n_test:63},
+    {ticker:"LEELAHOTELS", method:"qcbm_cross_transfer", accuracy:0.2222222222222222, macro_f1:0.11671840354767182, n_test:63},
+    {ticker:"AEGISVOPAK", method:"no_augmentation", accuracy:0.20634920634920634, macro_f1:0.15104209799861973, n_test:63},
+    {ticker:"AEGISVOPAK", method:"bootstrap", accuracy:0.19047619047619047, macro_f1:0.13731400966183577, n_test:63},
+    {ticker:"AEGISVOPAK", method:"markov_cross_transfer", accuracy:0.20634920634920634, macro_f1:0.12999999999999998, n_test:63},
+    {ticker:"AEGISVOPAK", method:"qcbm_cross_transfer", accuracy:0.25396825396825395, macro_f1:0.149159891598916, n_test:63}
+  ];
+
+  const methodLabel = {
+    no_augmentation: "No augmentation",
+    bootstrap: "Bootstrap",
+    markov_cross_transfer: "Markov cross-transfer",
+    qcbm_cross_transfer: "QCBM cross-transfer"
+  };
+
+  // populate table
+  const tbody = document.querySelector("#resultsTable tbody");
+  // find best accuracy per ticker to highlight
+  const bestByTicker = {};
+  resultsData.forEach(r=>{
+    if(!bestByTicker[r.ticker] || r.accuracy > bestByTicker[r.ticker]) bestByTicker[r.ticker] = r.accuracy;
+  });
+  resultsData.forEach(r=>{
+    const tr = document.createElement("tr");
+    const isBest = r.accuracy === bestByTicker[r.ticker];
+    tr.innerHTML = `
+      <td>${r.ticker}</td>
+      <td>${methodLabel[r.method]}</td>
+      <td class="${isBest ? 'best' : ''}">${r.accuracy.toFixed(3)}</td>
+      <td>${r.macro_f1.toFixed(3)}</td>
+      <td>${r.n_test}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // summary chart
+  const methods = ["no_augmentation","bootstrap","markov_cross_transfer","qcbm_cross_transfer"];
+  const meanAcc = methods.map(m=>{
+    const rows = resultsData.filter(r=>r.method===m);
+    return rows.reduce((a,r)=>a+r.accuracy,0)/rows.length;
+  });
+  const meanF1 = methods.map(m=>{
+    const rows = resultsData.filter(r=>r.method===m);
+    return rows.reduce((a,r)=>a+r.macro_f1,0)/rows.length;
+  });
+
+  const ctx = document.getElementById('summaryChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: methods.map(m=>methodLabel[m]),
+      datasets: [
+        {
+          label: 'Mean accuracy',
+          data: meanAcc,
+          backgroundColor: '#5EEAD4',
+          borderRadius: 2,
+          barPercentage: 0.55,
+        },
+        {
+          label: 'Mean macro-F1',
+          data: meanF1,
+          backgroundColor: '#3a4666',
+          borderRadius: 2,
+          barPercentage: 0.55,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: { color: '#8B96AC', font: { family: 'IBM Plex Mono', size: 11 } }
+        },
+        tooltip: {
+          backgroundColor: '#0D1420',
+          titleFont: { family: 'IBM Plex Mono' },
+          bodyFont: { family: 'IBM Plex Mono' },
+          borderColor: '#2a3550',
+          borderWidth: 1
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8B96AC', font: { family: 'IBM Plex Mono', size: 11 } }, grid: { display:false } },
+        y: { ticks: { color: '#5C687F', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(148,163,184,0.08)' }, beginAtZero:true, max: 0.35 }
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
