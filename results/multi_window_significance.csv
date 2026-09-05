@@ -1,0 +1,4 @@
+method,mean_diff_vs_baseline,n_observations,paired_t_stat,paired_t_pvalue,wilcoxon_pvalue,significant_at_0.05
+bootstrap,0.0058,30,1.6575,0.1082,0.092,False
+markov_cross_transfer,0.0004,30,0.0543,0.9571,0.1072,False
+qcbm_cross_transfer,-0.0012,30,-0.1579,0.8757,0.2275,False

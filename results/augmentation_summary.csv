@@ -1,5 +1,7 @@
-method,accuracy,macro_f1
-bootstrap,0.2381,0.1762
-markov_cross_transfer,0.2063,0.1219
-no_augmentation,0.2619,0.1794
-qcbm_cross_transfer,0.2381,0.1329
+,accuracy,accuracy,macro_f1,macro_f1
+,mean,std,mean,std
+method,,,,
+bootstrap,0.2827,0.0496,0.184,0.0311
+markov_cross_transfer,0.2797,0.0477,0.1675,0.0306
+no_augmentation,0.2862,0.0493,0.1831,0.0317
+qcbm_cross_transfer,0.2827,0.0412,0.1669,0.0294

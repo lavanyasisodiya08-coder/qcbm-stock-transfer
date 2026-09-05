@@ -1,0 +1,13 @@
+window,method,accuracy,macro_f1
+0.15,bootstrap,0.305,0.2001
+0.15,markov_cross_transfer,0.2914,0.1761
+0.15,no_augmentation,0.2942,0.1904
+0.15,qcbm_cross_transfer,0.2874,0.1757
+0.2,bootstrap,0.293,0.1946
+0.2,markov_cross_transfer,0.2848,0.1741
+0.2,no_augmentation,0.2862,0.1831
+0.2,qcbm_cross_transfer,0.2823,0.1724
+0.25,bootstrap,0.2833,0.1907
+0.25,markov_cross_transfer,0.2889,0.1796
+0.25,no_augmentation,0.2835,0.1897
+0.25,qcbm_cross_transfer,0.2906,0.1791
